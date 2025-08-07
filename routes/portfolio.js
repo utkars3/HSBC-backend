@@ -1,5 +1,5 @@
 import express from 'express';
-import { allItems, getStockData } from '../controllers/portfolioController.js';
+import {  getStockData } from '../controllers/portfolioController.js';
 
 const router = express.Router();
 

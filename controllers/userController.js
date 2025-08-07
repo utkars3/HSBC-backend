@@ -1,56 +1,63 @@
-import User from "../models/userModel.js";
+import connectDB from '../config/db.js';
 
-export const addUser = async (req, res) => {
-    const { name, email, gender}= req.body;
+// Create a DB connection instance
+const db = connectDB();
 
-    await User.create({name, email, gender});
-    res.status(201).json({ message: "User added successfully" });
+// Add new stock or update quantity
+export const addItem = (req, res) => {
+  const { stockName, stockQuantity } = req.body;
+
+  db.query(
+    'SELECT * FROM stocks WHERE stock_name = ?',
+    [stockName],
+    (err, result) => {
+      if (err) return res.status(500).json({ message: 'DB error', error: err.message });
+
+      if (result.length > 0) {
+        // Update quantity
+        const newQuantity = result[0].stock_quantity + Number(stockQuantity);
+        db.query(
+          'UPDATE stocks SET stock_quantity = ? WHERE stock_name = ?',
+          [newQuantity, stockName],
+          (err2) => {
+            if (err2) return res.status(500).json({ message: 'Update failed', error: err2.message });
+            res.status(200).json({ message: 'Stock quantity updated' });
+          }
+        );
+      } else {
+        // Insert new stock
+        db.query(
+          'INSERT INTO stocks (stock_name, stock_quantity) VALUES (?, ?)',
+          [stockName, stockQuantity],
+          (err3) => {
+            if (err3) return res.status(500).json({ message: 'Insert failed', error: err3.message });
+            res.status(200).json({ message: 'Stock added successfully' });
+          }
+        );
+      }
+    }
+  );
 };
 
-export const addItem= async (req, res) => {
-    const { stockName } = req.body;
-    const userId = req.params.id;
-    try {
-        const user = await User.findById(userId);
-        if (!user) {
-            return res.status(404).json({ message: "User not found" });
-        }
-        user.stockName.push(stockName);
-        await user.save();
-        res.status(200).json({ message: "Item added successfully", user });
-    } catch (error) {
-        res.status(500).json({ message: "Error adding item", error: error.message });
+// Delete stock by name
+export const deleteItem = (req, res) => {
+    console.log("hi")
+  const { stockName } = req.body;
+
+  db.query(
+    'DELETE FROM stocks WHERE stock_name = ?',
+    [stockName],
+    (err) => {
+      if (err) return res.status(500).json({ message: 'Delete failed', error: err.message });
+      res.status(200).json({ message: 'Stock deleted successfully' });
     }
-}
+  );
+};
 
-export const deleteItem = async (req, res) => {
-    console.log("deleteItem called");
-    const userId = req.params.id;
-    const { stockName } = req.body;
-
-    try {
-        const user = await User.findById(userId);
-        if (!user) {
-            return res.status(404).json({ message: "User not found" });
-        }
-        user.stockName = user.stockName.filter(item => item !== stockName);
-        await user.save();
-        res.status(200).json({ message: "Item deleted successfully", user });
-    } catch (error) {
-        res.status(500).json({ message: "Error deleting item", error: error.message });
-    }
-}
-
-export const getUserStock = async (req, res) => {
-    const userId = req.params.id;
-
-    try {
-        const user = await User.findById(userId);
-        if (!user) {
-            return res.status(404).json({ message: "User not found" });
-        }
-        res.status(200).json({ stockName: user.stockName });
-    } catch (error) {
-        res.status(500).json({ message: "Error fetching user stock", error: error.message });
-    }
-}
+// Get all stocks
+export const getUserStock = (req, res) => {
+  db.query('SELECT stock_name, stock_quantity FROM stocks', (err, results) => {
+    if (err) return res.status(500).json({ message: 'Fetch failed', error: err.message });
+    res.status(200).json({ stocks: results });
+  });
+};
