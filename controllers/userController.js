@@ -3,47 +3,104 @@ import connectDB from '../config/db.js';
 const db = connectDB();
 import { getCurrentPrice } from '../utils/fetchPrice.js';
 
+// export const addItem = async (req, res) => {
+//   const { stockName, stockQuantity } = req.body;
+//   const quantity = Number(stockQuantity);
+
+//   try {
+//     const currentPrice = await getCurrentPrice(stockName); // e.g., 120.50
+//     const totalAmountToAdd = currentPrice * quantity;
+
+//     db.query('SELECT * FROM stocks WHERE stock_name = ?', [stockName], (err, result) => {
+//       if (err) return res.status(500).json({ message: 'DB error', error: err.message });
+
+//       if (result.length > 0) {
+//         // Update existing stock
+//         const updatedQuantity = result[0].stock_quantity + quantity;
+//         const updatedPrice = result[0].price + totalAmountToAdd;
+
+//         db.query(
+//           'UPDATE stocks SET stock_quantity = ?, price = ? WHERE stock_name = ?',
+//           [updatedQuantity, updatedPrice, stockName],
+//           (err2) => {
+//             if (err2) return res.status(500).json({ message: 'Update failed', error: err2.message });
+//             res.status(200).json({ message: 'Stock updated successfully' });
+//           }
+//         );
+//       } else {
+//         // Insert new stock
+//         db.query(
+//           'INSERT INTO stocks (stock_name, stock_quantity, price) VALUES (?, ?, ?)',
+//           [stockName, quantity, totalAmountToAdd],
+//           (err3) => {
+//             if (err3) return res.status(500).json({ message: 'Insert failed', error: err3.message });
+//             res.status(200).json({ message: 'Stock added successfully' });
+//           }
+//         );
+//       }
+//     });
+//   } catch (err) {
+//     res.status(500).json({ message: 'Price fetch failed', error: err.message });
+//   }
+// };
+
 export const addItem = async (req, res) => {
-  const { stockName, stockQuantity } = req.body;
-  const quantity = Number(stockQuantity);
-
-  try {
-    const currentPrice = await getCurrentPrice(stockName); // e.g., 120.50
-    const totalAmountToAdd = currentPrice * quantity;
-
-    db.query('SELECT * FROM stocks WHERE stock_name = ?', [stockName], (err, result) => {
-      if (err) return res.status(500).json({ message: 'DB error', error: err.message });
-
-      if (result.length > 0) {
-        // Update existing stock
-        const updatedQuantity = result[0].stock_quantity + quantity;
-        const updatedPrice = result[0].price + totalAmountToAdd;
-
-        db.query(
-          'UPDATE stocks SET stock_quantity = ?, price = ? WHERE stock_name = ?',
-          [updatedQuantity, updatedPrice, stockName],
-          (err2) => {
-            if (err2) return res.status(500).json({ message: 'Update failed', error: err2.message });
-            res.status(200).json({ message: 'Stock updated successfully' });
-          }
-        );
-      } else {
-        // Insert new stock
-        db.query(
-          'INSERT INTO stocks (stock_name, stock_quantity, price) VALUES (?, ?, ?)',
-          [stockName, quantity, totalAmountToAdd],
-          (err3) => {
-            if (err3) return res.status(500).json({ message: 'Insert failed', error: err3.message });
-            res.status(200).json({ message: 'Stock added successfully' });
-          }
-        );
-      }
-    });
-  } catch (err) {
-    res.status(500).json({ message: 'Price fetch failed', error: err.message });
-  }
-};
-
+    const { stockName, stockQuantity } = req.body;
+    const quantity = Number(stockQuantity);
+  
+    try {
+      const currentPrice = await getCurrentPrice(stockName); // e.g., 120.50
+      const totalAmountToAdd = currentPrice * quantity;
+  
+      db.query('SELECT * FROM stocks WHERE stock_name = ?', [stockName], (err, result) => {
+        if (err) return res.status(500).json({ message: 'DB error', error: err.message });
+  
+        // ✅ Transaction insertion function with quantity
+        const insertTransaction = (stockName, price, quantity, type = 'buy') => {
+          db.query(
+            'INSERT INTO transactions (stock_name, price, quantity, type) VALUES (?, ?, ?, ?)',
+            [stockName, price, quantity, type],
+            (err4) => {
+              if (err4) console.error('Transaction insert failed:', err4.message);
+              else console.log(`Transaction logged: ${type.toUpperCase()} - ${stockName}, Qty: ${quantity}, Price: ${price}`);
+            }
+          );
+        };
+  
+        if (result.length > 0) {
+          // Update existing stock
+          const updatedQuantity = result[0].stock_quantity + quantity;
+          const updatedPrice = result[0].price + totalAmountToAdd;
+  
+          db.query(
+            'UPDATE stocks SET stock_quantity = ?, price = ? WHERE stock_name = ?',
+            [updatedQuantity, updatedPrice, stockName],
+            (err2) => {
+              if (err2) return res.status(500).json({ message: 'Update failed', error: err2.message });
+  
+              insertTransaction(stockName, currentPrice, quantity, 'buy'); // ✅ log transaction with quantity
+              res.status(200).json({ message: 'Stock updated successfully' });
+            }
+          );
+        } else {
+          // Insert new stock
+          db.query(
+            'INSERT INTO stocks (stock_name, stock_quantity, price) VALUES (?, ?, ?)',
+            [stockName, quantity, totalAmountToAdd],
+            (err3) => {
+              if (err3) return res.status(500).json({ message: 'Insert failed', error: err3.message });
+  
+              insertTransaction(stockName, currentPrice, quantity, 'buy'); // ✅ log transaction with quantity
+              res.status(200).json({ message: 'Stock added successfully' });
+            }
+          );
+        }
+      });
+    } catch (err) {
+      res.status(500).json({ message: 'Price fetch failed', error: err.message });
+    }
+  };
+  
 
 // Delete stock by name
 export const deleteItem = (req, res) => {
@@ -62,7 +119,7 @@ export const deleteItem = (req, res) => {
 
 // Get all stocks
 export const getUserStock = (req, res) => {
-  db.query('SELECT stock_name, stock_quantity FROM stocks', (err, results) => {
+  db.query('SELECT stock_name, stock_quantity, price FROM stocks', (err, results) => {
     if (err) return res.status(500).json({ message: 'Fetch failed', error: err.message });
     res.status(200).json({ stocks: results });
   });
@@ -96,3 +153,56 @@ export const getStockHistory = async (req, res) => {
     res.status(500).json({ message: 'Failed to fetch stock data', error: error.message });
   }
 };
+
+export const removeItem = async (req, res) => {
+    const { stockName, stockQuantity } = req.body;
+    const quantityToRemove = Number(stockQuantity);
+  
+    if (!stockName || isNaN(quantityToRemove) || quantityToRemove <= 0) {
+      return res.status(400).json({ message: 'Invalid stock name or quantity' });
+    }
+  
+    db.query('SELECT * FROM stocks WHERE stock_name = ?', [stockName], (err, result) => {
+      if (err) return res.status(500).json({ message: 'DB error', error: err.message });
+  
+      if (result.length === 0) {
+        return res.status(404).json({ message: 'Stock not found' });
+      }
+  
+      const stock = result[0];
+  
+      if (stock.stock_quantity < quantityToRemove) {
+        return res.status(400).json({ message: 'Not enough stock to remove' });
+      }
+  
+      const avgPricePerUnit = stock.price / stock.stock_quantity;
+      const amountToRemove = avgPricePerUnit * quantityToRemove;
+  
+      const updatedQuantity = stock.stock_quantity - quantityToRemove;
+      const updatedPrice = stock.price - amountToRemove;
+  
+      // Helper to insert into transactions table
+      const insertTransaction = (stockName, price, quantity, type = 'sell') => {
+        db.query(
+          'INSERT INTO transactions (stock_name, price, quantity, type) VALUES (?, ?, ?, ?)',
+          [stockName, price, quantity, type],
+          (err2) => {
+            if (err2) console.error('Transaction insert failed:', err2.message);
+            else console.log(`Transaction logged: SELL - ${stockName}, Qty: ${quantity}, Price: ${price}`);
+          }
+        );
+      };
+  
+      db.query(
+        'UPDATE stocks SET stock_quantity = ?, price = ? WHERE stock_name = ?',
+        [updatedQuantity, updatedPrice, stockName],
+        (err3) => {
+          if (err3) return res.status(500).json({ message: 'Update failed', error: err3.message });
+  
+          insertTransaction(stockName, avgPricePerUnit, quantityToRemove, 'sell');
+          res.status(200).json({ message: 'Stock removed successfully' });
+        }
+      );
+    });
+  };
+  
